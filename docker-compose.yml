@@ -1,0 +1,339 @@
+# Make sure to update the credential placeholders with your own secrets.
+# We mark them with # CHANGEME in the file below.
+# In addition, we recommend to restrict inbound traffic on the host to langfuse-web (port 3000) and minio (port 9090) only.
+# All other components are bound to localhost (127.0.0.1) to only accept connections from the local machine.
+# External connections from other machines will not be able to reach these services directly.
+services:
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    restart: always
+    depends_on: &langfuse-depends-on
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:3030:3030
+    environment: &langfuse-worker-env
+      DATABASE_URL: postgresql://postgres:${LANGFUSE_POSTGRES_PASSWORD}@postgres:5432/postgres
+      SALT: ${SALT:-"mysalt"}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-true}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-true}
+      CLICKHOUSE_MIGRATION_URL: ${CLICKHOUSE_MIGRATION_URL:-clickhouse://clickhouse:9000}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_CLUSTER_ENABLED: ${CLICKHOUSE_CLUSTER_ENABLED:-false}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: ${LANGFUSE_S3_EVENT_UPLOAD_REGION:-auto}
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: ${LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT:-http://minio:9000}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: ${LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE:-true}
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: ${LANGFUSE_S3_EVENT_UPLOAD_PREFIX:-events/}
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_MEDIA_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: ${LANGFUSE_S3_MEDIA_UPLOAD_REGION:-auto}
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: ${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://localhost:9990}
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: ${LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE:-true}
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: ${LANGFUSE_S3_MEDIA_UPLOAD_PREFIX:-media/}
+      LANGFUSE_S3_BATCH_EXPORT_ENABLED: ${LANGFUSE_S3_BATCH_EXPORT_ENABLED:-false}
+      LANGFUSE_S3_BATCH_EXPORT_BUCKET: ${LANGFUSE_S3_BATCH_EXPORT_BUCKET:-langfuse}
+      LANGFUSE_S3_BATCH_EXPORT_PREFIX: ${LANGFUSE_S3_BATCH_EXPORT_PREFIX:-exports/}
+      LANGFUSE_S3_BATCH_EXPORT_REGION: ${LANGFUSE_S3_BATCH_EXPORT_REGION:-auto}
+      LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: ${LANGFUSE_S3_BATCH_EXPORT_ENDPOINT:-http://minio:9000}
+      LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT: ${LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT:-http://localhost:9990}
+      LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: ${LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID:-minio}
+      LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE: ${LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE:-true}
+      LANGFUSE_INGESTION_QUEUE_DELAY_MS: ${LANGFUSE_INGESTION_QUEUE_DELAY_MS:-}
+      LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS: ${LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS:-}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_AUTH: ${REDIS_AUTH}
+      REDIS_TLS_ENABLED: ${REDIS_TLS_ENABLED:-false}
+      REDIS_TLS_CA: ${REDIS_TLS_CA:-/certs/ca.crt}
+      REDIS_TLS_CERT: ${REDIS_TLS_CERT:-/certs/redis.crt}
+      REDIS_TLS_KEY: ${REDIS_TLS_KEY:-/certs/redis.key}
+
+  langfuse-web:
+    image: langfuse/langfuse:3
+    restart: always
+    depends_on: *langfuse-depends-on
+    ports:
+      - 3000:3000
+    environment:
+      <<: *langfuse-worker-env
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
+
+  clickhouse:
+    image: clickhouse/clickhouse-server
+    restart: always
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    volumes:
+      - ./langfuse/langfuse_clickhouse_data:/var/lib/clickhouse
+      - ./langfuse/langfuse_clickhouse_logs:/var/log/clickhouse-server
+    ports:
+      - 127.0.0.1:8123:8123
+      - 127.0.0.1:9000:9000
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+
+  minio:
+    image: minio/minio
+    restart: always
+    entrypoint: sh
+    # create the 'langfuse' bucket before starting the service
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - 9990:9000
+      - 127.0.0.1:9091:9001
+    volumes:
+      - ./langfuse/langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 1s
+      timeout: 5s
+      retries: 5
+      start_period: 1s
+
+  redis:
+    image: redis:7
+    restart: always
+    command: >
+      --requirepass ${REDIS_AUTH}
+    ports:
+      - 127.0.0.1:6379:6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-latest}
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - ./langfuse/langfuse_postgres_data:/var/lib/postgresql/data
+
+  n8n-db:
+    image: postgres:16
+    container_name: n8n-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=${N8N_POSTGRES_PASSWORD}
+      - POSTGRES_DB=n8n
+    volumes:
+      - ./n8n/n8n-db_data:/var/lib/postgresql/data
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n-db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=${N8N_POSTGRES_PASSWORD}
+    volumes:
+      - ./n8n/n8n_data:/home/node/.n8n
+    depends_on:
+      - n8n-db
+
+  skyvern-postgres:
+    image: postgres:14-alpine
+    restart: always
+    # comment out if you want to externally connect DB
+    # ports:
+    #   - 5432:5432
+    volumes:
+      - ./skyvern/postgres-data:/var/lib/postgresql/data
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_USER=skyvern
+      - POSTGRES_PASSWORD=${SKYVERN_POSTGRES_PASSWORD}
+      - POSTGRES_DB=skyvern
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skyvern"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  skyvern:
+    image: public.ecr.aws/skyvern/skyvern:latest
+    restart: on-failure
+    # comment out if you want to externally call skyvern API
+    ports:
+      - 8000:8000
+      - 9222:9222 # for cdp browser forwarding
+    volumes:
+      - ./skyvern/artifacts:/data/artifacts
+      - ./skyvern/videos:/data/videos
+      - ./skyvern/har:/data/har
+      - ./skyvern/log:/data/log
+      - ./skyvern/.streamlit:/app/.streamlit
+      # Uncomment the following two lines if you want to connect to any local changes
+      # - ./skyvern:/app/skyvern
+      # - ./alembic:/app/alembic
+    environment:
+      - DATABASE_STRING=postgresql+psycopg://skyvern:${SKYVERN_POSTGRES_PASSWORD}@skyvern-postgres:5432/skyvern
+      - BROWSER_TYPE=chromium-headful
+      # - BROWSER_TYPE=cdp-connect
+      # Use this command to start Chrome with remote debugging:
+      # "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\chrome-cdp-profile" --no-first-run --no-default-browser-check
+      # /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="/Users/yourusername/chrome-cdp-profile" --no-first-run --no-default-browser-check
+      # - BROWSER_REMOTE_DEBUGGING_URL=http://host.docker.internal:9222/
+      # To run MCP inside this container, connect with: docker-compose exec skyvern python -m skyvern run mcp
+
+      # =========================
+      #       LLM Settings
+      # =========================
+      # OpenAI Support:
+      # If you want to use OpenAI as your LLM provider, uncomment the following lines and fill in your OpenAI API key.
+      #- ENABLE_OPENAI=true
+      #- LLM_KEY=OPENAI_GPT4_1
+      #- OPENAI_API_KEY=${OPENAI_API_KEY}
+      #  Gemini Support:
+      # Gemini is a new LLM provider that is currently in beta. You can use it by uncommenting the following lines and filling in your Gemini API key.
+      #- LLM_KEY=GEMINI
+      - ENABLE_GEMINI=true
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LLM_KEY=GEMINI_2.5_PRO_PREVIEW_03_25
+      # If you want to use other LLM provider, like azure and anthropic:
+      # - ENABLE_ANTHROPIC=true
+      # - LLM_KEY=ANTHROPIC_CLAUDE3.5_SONNET
+      # - ANTHROPIC_API_KEY=<your_anthropic_key>
+      # Microsoft Azure OpenAI support:
+      # If you'd like to use Microsoft Azure OpenAI as your managed LLM service integration with Skyvern, use the environment variables below.
+      # In your Microsoft Azure subscription, you will need to provision the OpenAI service and deploy a model, in order to utilize it.
+      # 1. Login to the Azure Portal
+      # 2. Create an Azure Resource Group
+      # 3. Create an OpenAI resource in the Resource Group (choose a region and pricing tier)
+      # 4. From the OpenAI resource's Overview page, open the "Azure AI Foundry" portal (click the "Explore Azure AI Foundry Portal" button)
+      # 5. In Azure AI Foundry, click "Shared Resources" --> "Deployments"
+      # 6. Click "Deploy Model" --> "Deploy Base Model" --> select a model (specify this model "Deployment Name" value for the AZURE_DEPLOYMENT variable below)
+      # - ENABLE_AZURE=true
+      # - LLM_KEY=AZURE_OPENAI                          # Leave this value static, don't change it
+      # - AZURE_DEPLOYMENT=<your_azure_deployment>      # Use the OpenAI model "Deployment Name" that you deployed, using the steps above
+      # - AZURE_API_KEY=<your_azure_api_key>            # Copy and paste Key1 or Key2 from the OpenAI resource in Azure Portal
+      # - AZURE_API_BASE=<your_azure_api_base>          # Copy and paste the "Endpoint" from the OpenAI resource in Azure Portal (eg. https://xyzxyzxyz.openai.azure.com/)
+      # - AZURE_API_VERSION=<your_azure_api_version>    # Specify a valid Azure OpenAI data-plane API version (eg. 2024-08-01-preview) Docs: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference
+      # Amazon Bedrock Support:
+      # Amazon Bedrock is a managed service that enables you to invoke LLMs and bill them through your AWS account.
+      # To use Amazon Bedrock as the LLM provider for Skyvern, specify the following environment variables.
+      # 1. In the AWS IAM console, create a new AWS IAM User (name it whatever you want)
+      # 2. Assign the "AmazonBedrockFullAccess" policy to the user
+      # 3. Generate an IAM Access Key under the IAM User's Security Credentials tab
+      # 4. In the Amazon Bedrock console, go to "Model Access"
+      # 5. Click Modify Model Access button
+      # 6. Enable "Claude 3.5 Sonnet v2" and save changes
+      # - ENABLE_BEDROCK=true
+      # - LLM_KEY=BEDROCK_ANTHROPIC_CLAUDE3.5_SONNET   # This is the Claude 3.5 Sonnet "V2" model. Change to BEDROCK_ANTHROPIC_CLAUDE3.5_SONNET_V1 for the non-v2 version.
+      # - AWS_REGION=us-west-2                         # Replace this with a different AWS region, if you desire
+      # - AWS_ACCESS_KEY_ID=FILL_ME_IN_PLEASE
+      # - AWS_SECRET_ACCESS_KEY=FILL_ME_IN_PLEASE
+      # Ollama Support:
+      # Ollama is a local LLM provider that can be used to run models locally on your machine.
+      # - LLM_KEY=OLLAMA
+      # - ENABLE_OLLAMA=true
+      # - OLLAMA_MODEL=qwen2.5:7b-instruct
+      # - OLLAMA_SERVER_URL=http://host.docker.internal:11434
+      # Open Router Support:
+      # - ENABLE_OPENROUTER=true
+      # - LLM_KEY=OPENROUTER
+      # - OPENROUTER_API_KEY=<your_openrouter_api_key>
+      # - OPENROUTER_MODEL=mistralai/mistral-small-3.1-24b-instruct
+      # Groq Support:
+      # - ENABLE_GROQ=true
+      # - LLM_KEY=GROQ
+      # - GROQ_API_KEY=<your_groq_api_key>
+      # - GROQ_MODEL=llama-3.1-8b-instant
+
+      # Maximum tokens to use: (only set for OpenRouter aand Ollama)
+      # - LLM_CONFIG_MAX_TOKENS=128000
+
+      # Bitwarden Settings
+      # If you are looking to integrate Skyvern with a password manager (eg Bitwarden), you can use the following environment variables.
+      # - BITWARDEN_SERVER=http://localhost  # OPTIONAL IF YOU ARE SELF HOSTING BITWARDEN
+      # - BITWARDEN_SERVER_PORT=8002 # OPTIONAL IF YOU ARE SELF HOSTING BITWARDEN
+      # - BITWARDEN_CLIENT_ID=FILL_ME_IN_PLEASE
+      # - BITWARDEN_CLIENT_SECRET=FILL_ME_IN_PLEASE
+      # - BITWARDEN_MASTER_PASSWORD=FILL_ME_IN_PLEASE
+
+    depends_on:
+      skyvern-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/.streamlit/secrets.toml"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  skyvern-ui:
+    image: public.ecr.aws/skyvern/skyvern-ui:latest
+    restart: on-failure
+    ports:
+      - 8080:8080
+      - 9090:9090
+    volumes:
+      - ./skyvern/artifacts:/data/artifacts
+      - ./skyvern/videos:/data/videos
+      - ./skyvern/har:/data/har
+      - ./skyvern/.streamlit:/app/.streamlit
+    environment:
+      # if you want to run skyvern on a remote server,
+      # you need to change the host in VITE_WSS_BASE_URL and VITE_API_BASE_URL to match your server ip
+      # If you're self-hosting this behind a dns, you'll want to set:
+      #   A route for the API: api.yourdomain.com -> localhost:8000
+      #   A route for the UI: yourdomain.com -> localhost:8080
+      #   A route for the artifact API: artifact.yourdomain.com -> localhost:9090 (maybe not needed)
+      - VITE_WSS_BASE_URL=ws://localhost:8000/api/v1
+    #   - VITE_ARTIFACT_API_BASE_URL=http://localhost:9090
+    #   - VITE_API_BASE_URL=http://localhost:8000/api/v1
+    #   - VITE_SKYVERN_API_KEY=<get this from "settings" in the Skyvern UI>
+    depends_on:
+      skyvern:
+        condition: service_healthy
